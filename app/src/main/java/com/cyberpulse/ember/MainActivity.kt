@@ -152,7 +152,7 @@ class MainActivity : AppCompatActivity() {
         val safe = JSONObject.quote(text)
         val kind = JSONObject.quote(type)
         runOnUiThread {
-            if (!isFinishing && !isDestroyed) web.evaluateJavascript(
+            if (!isFinishing) web.evaluateJavascript(
                 "(function(){var d={type:$kind,text:$safe};window.dispatchEvent(new CustomEvent('ember-native-event',{detail:d}));var s=document.getElementById('ost');if(s)s.textContent=$safe;})();",
                 null
             )
