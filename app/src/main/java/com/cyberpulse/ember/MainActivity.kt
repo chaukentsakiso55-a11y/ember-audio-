@@ -49,7 +49,12 @@ class MainActivity : AppCompatActivity() {
             settings.mediaPlaybackRequiresUserGesture = false
             settings.allowFileAccess = true
             settings.allowContentAccess = false
-            webViewClient = WebViewClient()
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, url: String) {
+                    super.onPageFinished(view, url)
+                    installNativeUiHooks(view)
+                }
+            }
             webChromeClient = WebChromeClient()
             addJavascriptInterface(bridge, "EmberNative")
             loadUrl("file:///android_asset/index.html")
@@ -57,6 +62,78 @@ class MainActivity : AppCompatActivity() {
         setContentView(web)
         registerVoiceReceiver()
         requestRuntimePermissions()
+    }
+
+    private fun installNativeUiHooks(view: WebView) {
+        val script = """
+            (function(){
+              if(window.__emberNativeHooksInstalled) return;
+              window.__emberNativeHooksInstalled = true;
+              function notice(message) {
+                var status = document.getElementById('ost');
+                if(status) status.textContent = message;
+                var toast = document.getElementById('toast');
+                if(toast) { toast.textContent = message; toast.style.display = 'block'; }
+              }
+              function runCommand(command) {
+                if(!command || !window.EmberNative) return;
+                try {
+                  var result = JSON.parse(window.EmberNative.executeCommand(command));
+                  notice(result.text || 'Command completed');
+                  window.EmberNative.speak(result.text || '');
+                  var chat = document.getElementById('chat');
+                  if(chat) {
+                    var you = document.createElement('div');
+                    you.className = 'm you'; you.textContent = command; chat.appendChild(you);
+                    var ember = document.createElement('div');
+                    ember.className = 'm ember'; ember.textContent = result.text || ''; chat.appendChild(ember);
+                    chat.scrollTop = chat.scrollHeight;
+                  }
+                } catch(e) { notice('Native command failed: ' + e.message); }
+              }
+              document.addEventListener('click', function(event) {
+                var button = event.target.closest && event.target.closest('[data-a]');
+                if(!button) return;
+                var action = button.dataset.a;
+                if(action === 'orb' || (action === 'go' && button.dataset.k === 'voice')) {
+                  setTimeout(function(){ if(window.EmberNative) window.EmberNative.startListening(); }, 300);
+                  return;
+                }
+                if(action === 'send' || action === 'chip') {
+                  var input = document.getElementById('cmd');
+                  var command = action === 'chip' ? (button.dataset.k || '') : (input ? input.value : '');
+                  if(!command.trim()) return;
+                  event.preventDefault(); event.stopImmediatePropagation();
+                  if(input) input.value = '';
+                  runCommand(command);
+                  return;
+                }
+                if(action === 'tlisten' || action === 'tspeak') {
+                  event.preventDefault(); event.stopImmediatePropagation();
+                  notice('Live translation is not implemented in this build yet.');
+                  return;
+                }
+                if(action === 'press' || action === 'conn' || action === 'disc' || action === 'simc' || action === 'simd' || action === 'dl' || action === 'chk' || action === 'runa') {
+                  event.preventDefault(); event.stopImmediatePropagation();
+                  notice('This control is not connected to a real Android feature yet.');
+                }
+              }, true);
+              document.addEventListener('keydown', function(event) {
+                if(event.key === 'Enter' && event.target && event.target.id === 'cmd') {
+                  event.preventDefault(); event.stopImmediatePropagation();
+                  var command = event.target.value; event.target.value = ''; runCommand(command);
+                }
+              }, true);
+              window.addEventListener('ember-native-event', function(event) {
+                var d = event.detail || {};
+                if(d.type === 'wake') notice('Hey Ember detected. Listening for your command…');
+                else if(d.type === 'command') notice('Processing: ' + d.text);
+                else if(d.type === 'error') notice(d.text);
+                else if(d.text) notice(d.text);
+              });
+            })();
+        """.trimIndent()
+        view.evaluateJavascript(script, null)
     }
 
     private fun registerVoiceReceiver() {
