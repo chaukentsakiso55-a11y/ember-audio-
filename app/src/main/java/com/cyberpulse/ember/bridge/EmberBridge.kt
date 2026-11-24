@@ -130,22 +130,44 @@ class EmberBridge(private val activity: MainActivity) {
     }
 
     private fun openRequestedApp(name: String): String {
-        val apps = listOf(
-            Triple("youtube", "com.google.android.youtube", "YouTube"),
-            Triple("whatsapp", "com.whatsapp", "WhatsApp"),
-            Triple("chrome", "com.android.chrome", "Chrome"),
-            Triple("spotify", "com.spotify.music", "Spotify"),
-            Triple("maps", "com.google.android.apps.maps", "Maps"),
-            Triple("camera", "com.android.camera", "Camera"),
-            Triple("calculator", "com.google.android.calculator", "Calculator"),
-            Triple("messages", "com.google.android.apps.messaging", "Messages")
+        val requested = name.removePrefix("my ").removeSuffix(" application").trim()
+        val aliases = mapOf(
+            "youtube" to listOf("youtube"),
+            "whatsapp" to listOf("whatsapp"),
+            "chrome" to listOf("chrome"),
+            "spotify" to listOf("spotify"),
+            "maps" to listOf("maps"),
+            "camera" to listOf("camera"),
+            "calculator" to listOf("calculator"),
+            "messages" to listOf("messages"),
+            "music" to listOf("music", "spotify")
         )
-        val match = apps.firstOrNull { name.contains(it.first) }
-        if (match == null) return reply("I don't have an app match for $name.")
-        val launch = context.packageManager.getLaunchIntentForPackage(match.second)
-            ?: return reply("${match.third} is not installed or Android did not provide a launch activity.")
+        val terms = aliases.entries.firstOrNull { requested.contains(it.key) }?.value ?: listOf(requested)
+        val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val matches = context.packageManager.queryIntentActivities(launcher, 0)
+        val match = matches.firstOrNull { info ->
+            val label = info.loadLabel(context.packageManager).toString().lowercase(Locale.getDefault())
+            terms.any { term -> label.contains(term) }
+        }
+        if (match == null) return reply("I couldn't find an installed app matching $requested.")
+        val launch = context.packageManager.getLaunchIntentForPackage(match.activityInfo.packageName)
+            ?: return reply("Android did not provide a launch activity for $requested.")
+        val label = match.loadLabel(context.packageManager).toString()
         activity.runOnUiThread { context.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-        return reply("Opening ${match.third}.")
+        return reply("Opening $label.")
+    }
+
+    @JavascriptInterface fun setCommunicationDevice(deviceId: Int): Boolean {
+        if (android.os.Build.VERSION.SDK_INT < 31) return false
+        val manager = audioManager()
+        val device = manager.availableCommunicationDevices.firstOrNull { it.id == deviceId } ?: return false
+        return manager.setCommunicationDevice(device)
+    }
+
+    @JavascriptInterface fun clearCommunicationDevice(): Boolean {
+        if (android.os.Build.VERSION.SDK_INT < 31) return false
+        audioManager().clearCommunicationDevice()
+        return true
     }
 
     private fun sendMediaKey(code: Int) {
