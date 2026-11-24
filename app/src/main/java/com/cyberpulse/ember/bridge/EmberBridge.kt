@@ -26,8 +26,8 @@ class EmberBridge(private val activity: MainActivity) {
     }
     @JavascriptInterface fun getAudioDevices(): String {
         val manager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val devices = manager.getDevices(AudioManager.GET_DEVICES_INPUTS or AudioManager.GET_DEVICES_OUTPUTS)
         val result = JSONArray()
+        val devices = try { manager.getDevices(AudioManager.GET_DEVICES_INPUTS or AudioManager.GET_DEVICES_OUTPUTS).toList() } catch (_: SecurityException) { emptyList() }
         devices.forEach { d -> result.put(JSONObject().apply {
             put("id", d.id); put("productName", d.productName?.toString() ?: "Audio device")
             put("type", typeName(d.type)); put("isSource", d.isSource); put("isSink", d.isSink)
