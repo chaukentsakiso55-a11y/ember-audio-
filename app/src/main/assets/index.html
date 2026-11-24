@@ -237,6 +237,24 @@ const c0=V.ctl;V.ctl=()=>c0()+`<section class="card" style="margin-top:12px"><h3
 A.orbclr=()=>{try{localStorage.removeItem(OK)}catch(e){}setOrbImg('');toast('Built-in orb restored')};
 document.addEventListener('change',e=>{if(e.target.id!=='orbf')return;const f=e.target.files[0];if(!f||!f.type.startsWith('image/'))return toast('Choose an image file');const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const s=Math.min(1,640/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*s;c.height=im.height*s;c.getContext('2d').drawImage(im,0,0,c.width,c.height);const u=c.toDataURL('image/png');setOrbImg(u);try{localStorage.setItem(OK,u);toast('Orb updated')}catch(x){toast('Orb applied for this session only (too large to save)')}};im.src=r.result};r.readAsDataURL(f)});
 })();
+
+/* Native Android bridge: real audio route inventory. The rest of the original HTML prototype remains marked as simulated until each feature is connected. */
+function emberNativePanel(){
+  if(!window.EmberNative) return '';
+  try {
+    const list=JSON.parse(window.EmberNative.getAudioDevices()||'[]');
+    const rows=list.map(d=>'<div class="li"><span>'+esc(d.productName)+'</span><span class="sub">'+esc(d.type)+(d.isSource?' · input':'')+(d.isSink?' · output':'')+'</span></div>').join('');
+    return '<section class="card" style="margin-top:12px"><h3>Android detected audio devices</h3>'+(rows||'<div class="sub">Android has not exposed any active audio routes yet.</div>')+'</section>';
+  } catch(e) { return '<section class="card"><h3>Android audio inventory</h3><div class="sub">Device inventory unavailable: '+esc(e.message||'permission or platform restriction')+'</div></section>'; }
+}
+const emberDashBase=V.dash;
+V.dash=()=>emberDashBase()+emberNativePanel();
+const emberDevicesBase=V.devices;
+V.devices=()=>emberNativePanel()+emberDevicesBase();
+if(window.EmberNative){
+  const status=document.querySelector('.top .sub');
+  if(status) status.textContent='Android bridge connected · real audio routes enabled · speech model setup pending';
+}
 $('#nav').innerHTML='<b>◉ EMBER</b>'+NAV.map(n=>`<button data-a="go" data-k="${n[0]}"><span>${n[2]}</span>${n[1]}</button>`).join('');
 go('dash');
 </script></body></html>
